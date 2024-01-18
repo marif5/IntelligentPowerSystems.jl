@@ -17,18 +17,19 @@ end
 #====================================================================================#
 # IPOT initialization of state vector function
 
-function init_inv(p0, q0, v_inf, theta_inf, omega_0, Lf, Cf, xline)
+function init_inv(p0, q0, v_t0, theta_inf, omega_0, Lf, Cf, xline)
     model = Model(Ipopt.Optimizer)
     @variable(model, (-pi/4) <= theta_t_0 <= (pi/4))
     @variable(model, (-pi/4) <= delta0 <= (pi/4))
-    @variable(model, 0.5 <= v_t0 <= 1.5)
+    @variable(model, 0.5 <= v_inf <= 1.5)
     @variable(model, 0.5 <= Vs0 <= 1.5)
 
     # constraints
     @constraint(model, p0 == (v_t0*v_inf/xline)*sin(theta_t_0-theta_inf) )
     @constraint(model, q0 == ((-v_t0*v_inf*cos(theta_inf-theta_t_0) + (v_t0^2))/xline) )
+
     @constraint(model, p0 == (v_t0*Vs0/(omega_0*Lf))*sin(delta0-theta_t_0) )
-    @constraint(model, q0 == (v_t0*Vs0*cos(delta0-theta_t_0) - (Vs0^2))/(omega_0*Lf) + (v_t0^2)*(Cf*omega_0) )
+    @constraint(model, q0 == (v_t0*Vs0*cos(delta0-theta_t_0) - (v_t0^2))/(omega_0*Lf) + (v_t0^2)*(Cf*omega_0) )
 
     @objective(model, Min, 1)
     optimize!(model)
@@ -39,7 +40,7 @@ function init_inv(p0, q0, v_inf, theta_inf, omega_0, Lf, Cf, xline)
     if (Int(termination_status(model)) != 4)
         @assert 1 == 2
     end
-    return value(v_t0),value(theta_t_0), value(Vs0), value(delta0)
+    return value(v_inf),value(theta_t_0), value(Vs0), value(delta0)
 end
 
 #====================================================================================#
@@ -255,16 +256,17 @@ function inverter_dynamics(X, xline, V_inf0, PLL_Coefficient, P_filter_droop_Coe
     v_star      = v0 - mq*(q_hat - q0)                          # Non-state variable - valid
 
     phi_d_dot   = v_star - Vd_t                                 # substate variable - valid
-    Id_s_hat    = Kp_vc*phi_d_dot - Ki_vc*phi_d  - Kf_vc*Id_t - (omega_pll - omega_0)*Cf*Vq_t           # Non-state variable - valid
+    Id_s_hat    = Kp_vc*(v_star - Vd_t) + Ki_vc*phi_d  + Kf_vc*Id_t - (omega_pll + omega_0)*Cf*Vq_t           # Non-state variable - valid
 
     gamma_d_dot = Id_s_hat - Id_s                               # substate variable - valid
-    Vd_s_hat    = Kp_ic*gamma_d_dot - Ki_ic*gamma_d  - Kf_ic*Vd_t - (omega_pll - omega_0)*Lf*Iq_s       # Non-state variable - valid
+    Vd_s_hat    = Kp_ic*(Id_s_hat - Id_s  ) + Ki_ic*gamma_d  + Kf_ic*Vd_t - (omega_pll + omega_0)*Lf*Iq_s       # Non-state variable - valid
 
     Vt_mag      = sqrt((Vd_t)^2 + (Vq_t)^2)
     Vs_abs_dot  = Kv_i*(v_star - Vt_mag)                        # Non-state variable - valid
     
     Vd_s    =   Vs_abs*cos(delta)
     Vq_s    =   Vs_abs*sin(delta)
+
     #Vd_s    =   0
     #Vq_s    =   0
     Id_s_dot    = (omega_b*(Vd_s - Vd_t))/Lf + (omega_pll + omega_0)*omega_b*Iq_s               # Non-state variable - valid

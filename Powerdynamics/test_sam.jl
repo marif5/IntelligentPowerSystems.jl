@@ -43,11 +43,21 @@ X[6] = 0                                    #phi_d      State + (Eq14)
 X[7] = 0                                    #gamma_d    State + (Eq16)
 X[8] = Vs0                                  #Vs_abs             IPOPT
 
-Vd_t = v_t0*cos(theta_t0)                                          
-Vq_t = v_t0*sin(theta_t0)
-Iq_t = (V_inf - Vd_t)/line_X                # Non-state variable - valid   
-Id_t = Vq_t/line_X
+VD_t = v_t0*cos(theta_t0)                                          
+VQ_t = v_t0*sin(theta_t0)
 
+Vd_t = v_t0                                        
+Vq_t = 0
+
+IQ_t = (V_inf - VD_t)/line_X                # Non-state variable - valid   
+ID_t = Vq_t/line_X
+
+R    = [cos(theta_t0) -sin(theta_t0); sin(theta_t0) cos(theta_t0)]
+Idq  = R\[ID_t; IQ_t]
+Id_t = Idq[1]
+Iq_t = Idq[2]
+
+Vdq  = R\[VD_t; VQ_t]
 
 
 # =======================
@@ -61,17 +71,19 @@ X[10] = Iq_s                                 #Iq_s
 X[11] = Vd_t                                 #Vd_t       (Eq1) + IPOPT
 X[12] = Vq_t                                 #Vq_t       (Eq1) + IPOPT
 
-PLL_coeff = [Kp_pll, Ki_pll, omega_0, omega_DQ, omega_b]
-P_droop_Coeff = [omega_c, Kp_i, p0, q0, v0, mp, mq]
+PLL_coeff       = [Kp_pll, Ki_pll, omega_0, omega_DQ, omega_b]
+P_droop_Coeff   = [omega_c, Kp_i, p0, q0, v0, mp, mq]
 IVControl_coeff = [Kp_vc, Ki_vc, Kf_vc, Kp_ic, Ki_ic, Kf_ic, Cf, Lf, Kv_i]
 
-# %% test initialization
+#  test initialization
 include("UGF_funcs.jl")
 
 x_dot = inverter_dynamics(X, line_X, V_inf, PLL_coeff, P_droop_Coeff, IVControl_coeff)
 
-plot(x_dot)
+# %%
+Vd_t*Id_t + Vq_t*Iq_t
 
+# plot(x_dot)
 
 
 # %% initialization test
@@ -93,3 +105,21 @@ v_t0        = 1
 theta_inf   = 0
 V_inf, theta_t0, Vs0, delta0 = init_inv(p0, q0, v_t0, theta_inf , omega_0, Lf, Cf, line_X)
 # Comment
+
+# %%
+
+Vd_t        = X[11]     #IV Contollers - Non Zero
+Vq_t        = X[12]     #IV Contollers - Non Zero
+
+#state equations
+xline      = 0.2;
+
+IQ_t = (V_inf-Vd_t)/xline                                  # Non-state variable - valid   
+ID_t = Vq_t/xline                                           # Non-state variable - valid
+
+R    = [cos(theta_t0) -sin(theta_t0); sin(theta_t0) cos(theta_t0)]
+Idq  = R\[ID_t; IQ_t]
+Id_t = Idq[1]
+Iq_t = Idq[2]
+
+p           = Vd_t*Id_t + Vq_t*Iq_t 

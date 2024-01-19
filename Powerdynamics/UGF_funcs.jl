@@ -236,9 +236,18 @@ function inverter_dynamics(X, xline, V_inf0, PLL_Coefficient, P_filter_droop_Coe
     Vd_t        = X[11]     #IV Contollers - Non Zero
     Vq_t        = X[12]     #IV Contollers - Non Zero
 
-    #state equations
     Iq_t = (V_inf0-Vd_t)/xline                                  # Non-state variable - valid   
     Id_t = Vq_t/xline                                           # Non-state variable - valid
+
+
+                ##state equations
+                #IQ_t = (V_inf0-Vd_t)/xline                                  # Non-state variable - valid   
+                #ID_t = Vq_t/xline                                           # Non-state variable - valid
+#
+                #R    = [cos(theta_t0) -sin(theta_t0); sin(theta_t0) cos(theta_t0)]
+                #Idq  = R\[ID_t; IQ_t]
+                #Id_t = Idq[1]
+                #Iq_t = Idq[2]
 
     p           = Vd_t*Id_t + Vq_t*Iq_t                         # Non-state variable - valid
     q           = Vq_t*Id_t - Vd_t*Iq_t                         # Non-state variable - valid

@@ -4,7 +4,6 @@ using SymPy, JuMP, LinearAlgebra, DataFrames, CSV, Plots, Ipopt
 include("UGF_funcs.jl")
 
 # %% Defining coefficents
-include("UGF_funcs.jl")
 
 line_X      = 0.2;
 omega_c     = 50;
@@ -50,7 +49,7 @@ Vd_t = v_t0
 Vq_t = 0
 
 IQ_t = (V_inf - VD_t)/line_X                # Non-state variable - valid   
-ID_t = Vq_t/line_X
+ID_t = VQ_t/line_X                          #changes
 
 R    = [cos(theta_t0) -sin(theta_t0); sin(theta_t0) cos(theta_t0)]
 Idq  = R\[ID_t; IQ_t]
@@ -58,9 +57,6 @@ Id_t = Idq[1]
 Iq_t = Idq[2]
 
 Vdq  = R\[VD_t; VQ_t]
-
-
-# =======================
 omega_pll_0 = Kp_pll*X[3]                                 #  (Eq8) 
 
 Id_s    =  Id_t - (omega_pll_0 + omega_0)*Vq_t*Cf         #  (Eq23)
@@ -80,7 +76,16 @@ include("UGF_funcs.jl")
 
 x_dot = inverter_dynamics(X, line_X, V_inf, PLL_coeff, P_droop_Coeff, IVControl_coeff)
 
-# %%
+
+
+
+
+
+
+
+
+
+# %% Debug Section
 Vd_t*Id_t + Vq_t*Iq_t
 
 # plot(x_dot)
@@ -95,7 +100,7 @@ pq0_to_cap = conj((vt_complex)/(1/(im*Cf*omega_0)))*vt_complex
 
 println(-(pq0_to_inv + pq0_to_cap))
 
-# %%
+# %% 
 
 Kf_ic       = 0;
 Cf          = 0.074;
@@ -106,7 +111,7 @@ theta_inf   = 0
 V_inf, theta_t0, Vs0, delta0 = init_inv(p0, q0, v_t0, theta_inf , omega_0, Lf, Cf, line_X)
 # Comment
 
-# %%
+# %% 
 
 Vd_t        = X[11]     #IV Contollers - Non Zero
 Vq_t        = X[12]     #IV Contollers - Non Zero
@@ -115,11 +120,13 @@ Vq_t        = X[12]     #IV Contollers - Non Zero
 xline      = 0.2;
 
 IQ_t = (V_inf-Vd_t)/xline                                  # Non-state variable - valid   
-ID_t = Vq_t/xline                                           # Non-state variable - valid
+ID_t = Vq_t/xline                                          # Non-state variable - valid
 
 R    = [cos(theta_t0) -sin(theta_t0); sin(theta_t0) cos(theta_t0)]
 Idq  = R\[ID_t; IQ_t]
 Id_t = Idq[1]
 Iq_t = Idq[2]
 
-p           = Vd_t*Id_t + Vq_t*Iq_t 
+p = Vd_t*Id_t + Vq_t*Iq_t 
+phat_dot = omega_c*(p - p0)
+q = Vq_t*Id_t + Vd_t*Iq_t 

@@ -236,18 +236,27 @@ function inverter_dynamics(X, xline, V_inf0, PLL_Coefficient, P_filter_droop_Coe
     Vd_t        = X[11]     #IV Contollers - Non Zero
     Vq_t        = X[12]     #IV Contollers - Non Zero
 
-    Iq_t = (V_inf0-Vd_t)/xline                                  # Non-state variable - valid   
-    Id_t = Vq_t/xline                                           # Non-state variable - valid
+                        v_t0 = Vd_t
+                        VD_t = v_t0*cos(theta_t)                                          
+                        VQ_t = v_t0*sin(theta_t)
+
+                        IQ_t = (V_inf0 - VD_t)/line_X                # Non-state variable - valid   
+                        ID_t = VQ_t/line_X                           #changes
+
+                        R    = [cos(theta_t) -sin(theta_t); sin(theta_t) cos(theta_t)]
+                        Idq  = R\[ID_t; IQ_t]
+                        Id_t = Idq[1]
+                        Iq_t = Idq[2]
+
+                        Vdq  = R\[VD_t; VQ_t]
+                        omega_pll_0 = Kp_pll*X[3]                                 #  (Eq8) 
+
+                        Id_s    =  Id_t - (omega_pll_0 + omega_0)*Vq_t*Cf         #  (Eq23)
+                        Iq_s    =  Iq_t + (omega_pll_0 + omega_0)*Vd_t*Cf         #  (Eq24)
 
 
-                ##state equations
-                #IQ_t = (V_inf0-Vd_t)/xline                                  # Non-state variable - valid   
-                #ID_t = Vq_t/xline                                           # Non-state variable - valid
-#
-                #R    = [cos(theta_t0) -sin(theta_t0); sin(theta_t0) cos(theta_t0)]
-                #Idq  = R\[ID_t; IQ_t]
-                #Id_t = Idq[1]
-                #Iq_t = Idq[2]
+  #  Iq_t = (V_inf0-Vd_t)/xline                                  # Non-state variable - valid   
+  #  Id_t = Vq_t/xline                                           # Non-state variable - valid
 
     p           = Vd_t*Id_t + Vq_t*Iq_t                         # Non-state variable - valid
     q           = Vq_t*Id_t - Vd_t*Iq_t                         # Non-state variable - valid

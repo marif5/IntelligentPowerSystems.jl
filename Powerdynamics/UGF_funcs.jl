@@ -198,72 +198,87 @@ end
 
 function inverter_dynamics(X, xline, V_inf0, PLL_Coefficient, P_filter_droop_Coefficient, IV_Controller_Coefficient)
     #stating coefficents:
-    Kp_pll      = PLL_Coefficient[1]
-    Ki_pll      = PLL_Coefficient[2]
-    omega_0     = PLL_Coefficient[3]
-    omega_DQ    = PLL_Coefficient[4]
-    omega_b     = PLL_Coefficient[5]
+    Kp_pll      = copy(PLL_Coefficient[1])
+    Ki_pll      = copy(PLL_Coefficient[2])
+    omega_0     = copy(PLL_Coefficient[3])
+    omega_DQ    = copy(PLL_Coefficient[4])
+    omega_b     = copy(PLL_Coefficient[5])
 
-    omega_c     = P_filter_droop_Coefficient[1]
-    Kp_i        = P_filter_droop_Coefficient[2]
-    p0          = P_filter_droop_Coefficient[3]
-    q0          = P_filter_droop_Coefficient[4]
-    v0          = P_filter_droop_Coefficient[5]
-    mp          = P_filter_droop_Coefficient[6]
-    mq          = P_filter_droop_Coefficient[7]
+    omega_c     = copy(P_filter_droop_Coefficient[1])
+    Kp_i        = copy(P_filter_droop_Coefficient[2])
+    p0          = copy(P_filter_droop_Coefficient[3])
+    q0          = copy(P_filter_droop_Coefficient[4])
+    v0          = copy(P_filter_droop_Coefficient[5])
+    mp          = copy(P_filter_droop_Coefficient[6])
+    mq          = copy(P_filter_droop_Coefficient[7])
 
-    Kp_vc       = IV_Controller_Coefficient[1]
-    Ki_vc       = IV_Controller_Coefficient[2]
-    Kf_vc       = IV_Controller_Coefficient[3]
-    Kp_ic       = IV_Controller_Coefficient[4]
-    Ki_ic       = IV_Controller_Coefficient[5]
-    Kf_ic       = IV_Controller_Coefficient[6]
-    Cf          = IV_Controller_Coefficient[7]
-    Lf          = IV_Controller_Coefficient[8]
-    Kv_i        = IV_Controller_Coefficient[9]
+    Kp_vc       = copy(IV_Controller_Coefficient[1])
+    Ki_vc       = copy(IV_Controller_Coefficient[2])
+    Kf_vc       = copy(IV_Controller_Coefficient[3])
+    Kp_ic       = copy(IV_Controller_Coefficient[4])
+    Ki_ic       = copy(IV_Controller_Coefficient[5])
+    Kf_ic       = copy(IV_Controller_Coefficient[6])
+    Cf          = copy(IV_Controller_Coefficient[7])
+    Lf          = copy(IV_Controller_Coefficient[8])
+    Kv_i        = copy(IV_Controller_Coefficient[9])
 
     #stating states:
-    p_hat       = X[1]      #powerfilter
-    q_hat       = X[2]      #powerfilter
-    zeta        = X[3]      #PLL
-    theta_pll   = X[4]      #PLL
-    delta       = X[5]      #Active Power Control
-    phi_d       = X[6]      #IV Contollers
-    gamma_d     = X[7]      #IV Contollers
-    Vs_abs      = X[8]      #IV Contollers
-    Id_s        = X[9]      #IV Contollers - ??
-    Iq_s        = X[10]     #IV Contollers - ??
-    Vd_t        = X[11]     #IV Contollers - Non Zero
-    Vq_t        = X[12]     #IV Contollers - Non Zero
-
-                        v_t0 = Vd_t
-                        VD_t = v_t0*cos(theta_t)                                          
-                        VQ_t = v_t0*sin(theta_t)
-
-                        IQ_t = (V_inf0 - VD_t)/line_X                # Non-state variable - valid   
-                        ID_t = VQ_t/line_X                           #changes
-
-                        R    = [cos(theta_t) -sin(theta_t); sin(theta_t) cos(theta_t)]
-                        Idq  = R\[ID_t; IQ_t]
-                        Id_t = Idq[1]
-                        Iq_t = Idq[2]
-
-                        Vdq  = R\[VD_t; VQ_t]
-                        omega_pll_0 = Kp_pll*X[3]                                 #  (Eq8) 
-
-                        Id_s    =  Id_t - (omega_pll_0 + omega_0)*Vq_t*Cf         #  (Eq23)
-                        Iq_s    =  Iq_t + (omega_pll_0 + omega_0)*Vd_t*Cf         #  (Eq24)
+    p_hat       = copy(X[1])      #powerfilter
+    q_hat       = copy(X[2])      #powerfilter
+    zeta        = copy(X[3])      #PLL
+    theta_pll   = copy(X[4])      #PLL
+    delta       = copy(X[5])      #Active Power Control
+    phi_d       = copy(X[6])      #IV Contollers
+    gamma_d     = copy(X[7])      #IV Contollers
+    Vs_abs      = copy(X[8])      #IV Contollers
+    Id_s        = copy(X[9])      #IV Contollers - ??
+    Iq_s        = copy(X[10])     #IV Contollers - ??
+    Vd_t        = copy(X[11])     #IV Contollers - Non Zero
+    Vq_t        = copy(X[12])     #IV Contollers - Non Zero
 
 
-  #  Iq_t = (V_inf0-Vd_t)/xline                                  # Non-state variable - valid   
-  #  Id_t = Vq_t/xline                                           # Non-state variable - valid
+    R   = [cos(theta_pll) -sin(theta_pll); sin(theta_pll) cos(theta_pll)]
+    vdq = [Vd_t; Vq_t]
+    VDQ = R*vdq
+    VD_t = VDQ[1]
+    VQ_t = VDQ[2]
+
+    IQ_t = (V_inf0 - VD_t)/line_X                # Non-state variable - valid   
+    ID_t = VQ_t/line_X                           #changes
+
+    Idq  = R\[ID_t; IQ_t]
+    Id_t = Idq[1]
+    Iq_t = Idq[2]
+
+    #=
+    theta_t - theta_pll = atan(Vq_t/Vd_t) == theta_t
+
+    v_t0 = Vd_t
+    VD_t = v_t0*cos(theta_t)                                          
+    VQ_t = v_t0*sin(theta_t)
+
+    IQ_t = (V_inf0 - VD_t)/line_X                # Non-state variable - valid   
+    ID_t = VQ_t/line_X                           #changes
+
+    R    = [cos(theta_t) -sin(theta_t); sin(theta_t) cos(theta_t)]
+    Idq  = R\[ID_t; IQ_t]
+    Id_t = Idq[1]
+    Iq_t = Idq[2]
+
+    Vdq  = R\[VD_t; VQ_t]
+    omega_pll_0 = Kp_pll*X[3]                                 #  (Eq8) 
+
+    Id_s    =  Id_t - (omega_pll_0 + omega_0)*Vq_t*Cf         #  (Eq23)
+    Iq_s    =  Iq_t + (omega_pll_0 + omega_0)*Vd_t*Cf         #  (Eq24)
+    #  Iq_t = (V_inf0-Vd_t)/xline                                  # Non-state variable - valid   
+    #  Id_t = Vq_t/xline                                           # Non-state variable - valid
+    =#
 
     p           = Vd_t*Id_t + Vq_t*Iq_t                         # Non-state variable - valid
     q           = Vq_t*Id_t - Vd_t*Iq_t                         # Non-state variable - valid
     p_hat_dot   = omega_c*(p-p_hat)                             # substate variable - valid
     q_hat_dot   = omega_c*(q-q_hat)                             # substate variable - valid
-
-    theta_t     = atan(Vq_t/Vd_t)                               # Non-state variable - valid
+    theta_t     = atan(VQ_t/VD_t)                               # Non-state variable - valid
     
     zeta_dot       = theta_t - theta_pll                        # Non-state variable - valid
     omega_pll      = Kp_pll*(theta_t-theta_pll) + Ki_pll*zeta   # Non-state variable - valid
@@ -277,16 +292,14 @@ function inverter_dynamics(X, xline, V_inf0, PLL_Coefficient, P_filter_droop_Coe
     Id_s_hat    = Kp_vc*(v_star - Vd_t) + Ki_vc*phi_d  + Kf_vc*Id_t - (omega_pll + omega_0)*Cf*Vq_t           # Non-state variable - valid
 
     gamma_d_dot = Id_s_hat - Id_s                               # substate variable - valid
-    Vd_s_hat    = Kp_ic*(Id_s_hat - Id_s  ) + Ki_ic*gamma_d  + Kf_ic*Vd_t - (omega_pll + omega_0)*Lf*Iq_s       # Non-state variable - valid
+    Vd_s_hat    = Kp_ic*(Id_s_hat - Id_s  ) + Ki_ic*gamma_d  - Kf_ic*Vd_t - (omega_pll + omega_0)*Lf*Iq_s       # Non-state variable - valid
 
     Vt_mag      = sqrt((Vd_t)^2 + (Vq_t)^2)
     Vs_abs_dot  = Kv_i*(v_star - Vt_mag)                        # Non-state variable - valid
     
-    Vd_s    =   Vs_abs*cos(delta)
-    Vq_s    =   Vs_abs*sin(delta)
+    Vd_s    =   Vs_abs*cos(delta - theta_pll)
+    Vq_s    =   Vs_abs*sin(delta - theta_pll)
 
-    #Vd_s    =   0
-    #Vq_s    =   0
     Id_s_dot    = (omega_b*(Vd_s - Vd_t))/Lf + (omega_pll + omega_0)*omega_b*Iq_s               # Non-state variable - valid
     Iq_s_dot    = (omega_b*(Vq_s - Vq_t))/Lf - (omega_pll + omega_0)*omega_b*Id_s               # Non-state variable - valid
     Vd_t_dot    = (omega_b*(Id_s - Id_t))/Cf + (omega_pll + omega_0)*omega_b*Vq_t               # Non-state variable - valid

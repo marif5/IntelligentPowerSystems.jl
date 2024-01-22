@@ -3,27 +3,27 @@ using SymPy, JuMP, LinearAlgebra, DataFrames, CSV, Plots, Ipopt
 # Including fucntions file
 include("UGF_funcs.jl")
 
-# %% Defining coefficents
+# Defining coefficents
 
 line_X      = 0.2;
-omega_c     = 50;
-Kp_pll      = 0.2;
-Ki_pll      = 5.0;
-Kp_i        = 0.3;
+omega_c     = 0.001*50;
+Kp_pll      = 0*0.2;
+Ki_pll      = 0*5.0;
+Kp_i        = 0*0.3;
 omega_0     = 1.0;
 omega_DQ    = 1.0;
 omega_b     = 2*pi*60;
 p0          = 0.5;
 q0          = 0.1;
 v0          = 1;
-mp          = 100;
-mq          = 0.05;
-Kp_vc       = 1;
-Ki_vc       = 2 ;
-Kf_vc       = 1;
-Kp_ic       = 1;
-Ki_ic       = 2 ;
-Kf_ic       = 0;
+mp          = 0*0.5 # 100;
+mq          = 0*0.05;
+Kp_vc       = 0*1;
+Ki_vc       = 0*2 ;
+Kf_vc       = 0*1;
+Kp_ic       = 0*1;
+Ki_ic       = 0*2 ;
+Kf_ic       = 0*0;
 Cf          = 0.074;
 Lf          = 0.08;
 Kv_i        = Kp_i; #not given in the paper
@@ -32,7 +32,7 @@ theta_inf   = 0
 V_inf, theta_t0, Vs0, delta0 = init_inv(p0, q0, v_t0, theta_inf , omega_0, Lf, Cf, line_X)
 
 # State vector formation
-X = zeros(12);
+X    = zeros(12);
 X[1] = p0                                   #P_hat      State + (Eq5)
 X[2] = q0                                   #Q_hat      State + (Eq6)
 X[3] = 0                                    #zeta       State + (Eq7)
@@ -62,6 +62,15 @@ omega_pll_0 = Kp_pll*X[3]                                 #  (Eq8)
 Id_s    =  Id_t - (omega_pll_0 + omega_0)*Vq_t*Cf         #  (Eq23)
 Iq_s    =  Iq_t + (omega_pll_0 + omega_0)*Vd_t*Cf         #  (Eq24)
 
+# # %%
+Pt = VD_t*ID_t + VQ_t*IQ_t 
+Qt = VQ_t*ID_t - VD_t*IQ_t 
+
+pt = Vd_t*Id_t + Vq_t*Iq_t 
+qt = Vq_t*Id_t - Vd_t*Iq_t 
+
+# # %%
+
 X[9]  = Id_s                                 #Id_s                    
 X[10] = Iq_s                                 #Iq_s                    
 X[11] = Vd_t                                 #Vd_t       (Eq1) + IPOPT
@@ -76,6 +85,22 @@ include("UGF_funcs.jl")
 
 x_dot = inverter_dynamics(X, line_X, V_inf, PLL_coeff, P_droop_Coeff, IVControl_coeff)
 
+# =====
+dt = 0.00001
+time_vec = 0:dt:0.01
+X_data = zeros(length(X), length(time_vec)+1)
+X_data[:,1] .= copy(X)
+loop_ind = 2
+for tt in time_vec
+    x_dot = inverter_dynamics(X, line_X, V_inf, PLL_coeff, P_droop_Coeff, IVControl_coeff)
+    X = X .+ dt*x_dot
+    X_data[:,loop_ind] .= copy(X)
+    loop_ind += 1
+
+    println(x_dot)
+end 
+
+plot(X_data')
 
 
 
@@ -130,3 +155,17 @@ Iq_t = Idq[2]
 p = Vd_t*Id_t + Vq_t*Iq_t 
 phat_dot = omega_c*(p - p0)
 q = Vq_t*Id_t + Vd_t*Iq_t 
+
+# %% ======
+using DifferentialEquations
+
+#Setup
+y0 = copy(X)
+tspan = (0.0, 1.0)
+
+#Define the problem
+radioactivedecay(u, p, t) = -C₁ * u
+
+#Pass to solver
+prob = ODEProblem(radioactivedecay, u₀, tspan)
+sol = solve(prob, Tsit5())

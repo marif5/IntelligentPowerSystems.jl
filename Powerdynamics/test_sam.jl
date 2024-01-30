@@ -6,24 +6,24 @@ include("UGF_funcs.jl")
 # Defining coefficents
 
 line_X      = 0.2;
-omega_c     = 0.001*50;
-Kp_pll      = 0*0.2;
-Ki_pll      = 0*5.0;
-Kp_i        = 0*0.3;
+omega_c     = 50;
+Kp_pll      = 0.2;
+Ki_pll      = 5.0;
+Kp_i        = 0.3;
 omega_0     = 1.0;
 omega_DQ    = 1.0;
 omega_b     = 2*pi*60;
 p0          = 0.5;
 q0          = 0.1;
 v0          = 1;
-mp          = 0*0.5 # 100;
-mq          = 0*0.05;
-Kp_vc       = 0*1;
-Ki_vc       = 0*2 ;
-Kf_vc       = 0*1;
-Kp_ic       = 0*1;
-Ki_ic       = 0*2 ;
-Kf_ic       = 0*0;
+mp          = 100;
+mq          = 0.05;
+Kp_vc       = 1;
+Ki_vc       = 2 ;
+Kf_vc       = 1;
+Kp_ic       = 1;
+Ki_ic       = 2 ;
+Kf_ic       = 0;
 Cf          = 0.074;
 Lf          = 0.08;
 Kv_i        = Kp_i; #not given in the paper
@@ -85,7 +85,10 @@ include("UGF_funcs.jl")
 
 x_dot = inverter_dynamics(X, line_X, V_inf, PLL_coeff, P_droop_Coeff, IVControl_coeff)
 
-# =====
+
+# %% ==== forward Euler Implementation =====
+
+
 dt = 0.00001
 time_vec = 0:dt:0.01
 X_data = zeros(length(X), length(time_vec)+1)
@@ -93,14 +96,16 @@ X_data[:,1] .= copy(X)
 loop_ind = 2
 for tt in time_vec
     x_dot = inverter_dynamics(X, line_X, V_inf, PLL_coeff, P_droop_Coeff, IVControl_coeff)
-    X = X .+ dt*x_dot
+    X = X .+ dt*x_dot                               # Forward Euler
     X_data[:,loop_ind] .= copy(X)
     loop_ind += 1
 
     println(x_dot)
 end 
 
-plot(X_data')
+plot!(X_data[11:12,:]')
+plot!(X_data[6:7,:]')
+
 
 
 
@@ -157,15 +162,3 @@ phat_dot = omega_c*(p - p0)
 q = Vq_t*Id_t + Vd_t*Iq_t 
 
 # %% ======
-using DifferentialEquations
-
-#Setup
-y0 = copy(X)
-tspan = (0.0, 1.0)
-
-#Define the problem
-radioactivedecay(u, p, t) = -C₁ * u
-
-#Pass to solver
-prob = ODEProblem(radioactivedecay, u₀, tspan)
-sol = solve(prob, Tsit5())

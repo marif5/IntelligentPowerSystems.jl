@@ -1,4 +1,5 @@
 # Including fucntions file
+using JuMP, Ipopt, DifferentialEquations, LinearAlgebra, Plots
 
 include("../Powerdynamics/UGF_funcs.jl")
 
@@ -74,10 +75,10 @@ tspan = (0.0, 1.0)
 
 # %% ==
 
-function ODE_inverter(dX, X, tspan, p)
-    PLL_coeff       = p["PLL_coeff"]
-    P_droop_Coeff   = p["P_droop_Coeff"]
-    IVControl_coeff = p["IVControl_coeff"]
+function ODE_inverter(dX, X, p, tspan)
+    PLL_coeff       = p[1:5]
+    P_droop_Coeff   = p[6:12]
+    IVControl_coeff = p[13:21]
    
     Kp_pll      = copy(PLL_coeff[1])
     Ki_pll      = copy(PLL_coeff[2])
@@ -164,22 +165,54 @@ function ODE_inverter(dX, X, tspan, p)
 
  end
  
- DX = ODE_inverter(dX, X, tspan, p)
+# DX = ODE_inverter(dX, X, tspan, p)
  
  # %% Running ODE Solver
 
  # ODE_inverter(dX, X, tspan, p)
-p = Dict("PLL_coeff"         => PLL_coeff,
-        "P_droop_Coeff"      => P_droop_Coeff,
-        "IVControl_coeff"    => IVControl_coeff)
+p = [PLL_coeff; P_droop_Coeff; IVControl_coeff]
+# p = Dict("PLL_coeff"         => PLL_coeff,
+#         "P_droop_Coeff"      => P_droop_Coeff,    BADDDDDD!! 
+#         "IVControl_coeff"    => IVControl_coeff)
+# 
+# PLL_coeff       = p["PLL_coeff"]
+# P_droop_Coeff   = p["P_droop_Coeff"]
+# IVControl_coeff = p["IVControl_coeff"]
+X0 = copy(X)
 
-PLL_coeff       = p["PLL_coeff"]
-P_droop_Coeff   = p["P_droop_Coeff"]
-IVControl_coeff = p["IVControl_coeff"]
+prob_ = ODEProblem(ODE_inverter, X0, tspan, p)
+sol = solve(prob_, Tsit5())
 
-prob = ODEProblem(ODE_inverter, X0, tspan, p)
-sol = solve(prob, BS3())
-
-plot(sol, title = "ODE_inverter", xlabel = "Time", ylabel = "Variables", label = ["y1" "y2"])
+# plot(sol, title = "ODE_inverter", xlabel = "Time", ylabel = "Variables", label = ["y1" "y2"])
 
 # %%% ==
+
+# %% 
+# Simple Pendulum Problem
+using DifferentialEquations, Plots
+
+#Constants
+const g = 9.81
+L = 1.0
+
+#Initial Conditions
+u₀ = [0, π / 2]
+tspan = (0.0, 6.3)
+
+#Define the problem
+function simplependulum(du, u, p, t)
+    b = p[1:2]
+    θ = u[1]
+    dθ = u[2]
+    du[1] = dθ
+    du[2] = -(g / L) * sin(θ)*b[1]
+end
+
+#Pass to solvers
+p    = [3;4;5]
+prob = ODEProblem(simplependulum, u₀, tspan, p)
+sol  = solve(prob, Tsit5())
+
+#Plot
+plot(sol, linewidth = 2, title = "Simple Pendulum Problem", xaxis = "Time",
+    yaxis = "Height", label = ["\\theta" "d\\theta"])

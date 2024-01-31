@@ -5,7 +5,7 @@ include("../Powerdynamics/UGF_funcs.jl")
 
 # %%  === Initialization
 
-line_X      = 0.2;
+line_X      = 1.4;
 omega_c     = 50;
 Kp_pll      = 0.2;
 Ki_pll      = 5.0;
@@ -19,7 +19,7 @@ v0          = 1;
 mp          = 100;
 mq          = 0.05;
 Kp_vc       = 1;
-Ki_vc       = 2 ;
+Ki_vc       = 2;
 Kf_vc       = 1;
 Kp_ic       = 1;
 Ki_ic       = 2 ;
@@ -71,11 +71,106 @@ PLL_coeff       = [Kp_pll, Ki_pll, omega_0, omega_DQ, omega_b]
 P_droop_Coeff   = [omega_c, Kp_i, p0, q0, v0, mp, mq]
 IVControl_coeff = [Kp_vc, Ki_vc, Kf_vc, Kp_ic, Ki_ic, Kf_ic, Cf, Lf, Kv_i]
 
-tspan = (0.0, 1.0)
+tspan = (0.0, 5.0)
 
-# %% ==
-
+# 
 function ODE_inverter(dX, X, p, tspan)
+    PLL_coeff       = p[1:5]
+    P_droop_Coeff   = p[6:12]
+    IVControl_coeff = p[13:21]
+    line_X          = 1.4
+   
+    Kp_pll      = copy(PLL_coeff[1])
+    Ki_pll      = copy(PLL_coeff[2])
+    omega_0     = copy(PLL_coeff[3])
+    omega_DQ    = copy(PLL_coeff[4])
+    omega_b     = copy(PLL_coeff[5])
+
+    omega_c     = copy(P_droop_Coeff[1])
+    Kp_i        = copy(P_droop_Coeff[2])
+    p0          = 0.7 # copy(P_droop_Coeff[3])
+    q0          = copy(P_droop_Coeff[4])
+    v0          = copy(P_droop_Coeff[5])
+    mp          = copy(P_droop_Coeff[6])
+    mq          = copy(P_droop_Coeff[7])
+
+    Kp_vc       = copy(IVControl_coeff[1])
+    Ki_vc       = copy(IVControl_coeff[2])
+    Kf_vc       = copy(IVControl_coeff[3])
+    Kp_ic       = copy(IVControl_coeff[4])
+    Ki_ic       = copy(IVControl_coeff[5])
+    Kf_ic       = copy(IVControl_coeff[6])
+    Cf          = copy(IVControl_coeff[7])
+    Lf          = copy(IVControl_coeff[8])
+    Kv_i        = copy(IVControl_coeff[9])
+
+    #stating states:
+    p_hat       = copy(X[1])      #powerfilter
+    q_hat       = copy(X[2])      #powerfilter
+    zeta        = copy(X[3])      #PLL
+    theta_pll   = copy(X[4])      #PLL
+    delta       = copy(X[5])      #Active Power Control
+    phi_d       = copy(X[6])      #IV Contollers
+    gamma_d     = copy(X[7])      #IV Contollers
+    Vs_abs      = copy(X[8])      #IV Contollers
+    Id_s        = copy(X[9])      #IV Contollers - ??
+    Iq_s        = copy(X[10])     #IV Contollers - ??
+    Vd_t        = copy(X[11])     #IV Contollers - Non Zero
+    Vq_t        = copy(X[12])     #IV Contollers - Non Zero
+
+    R           = [cos(theta_pll) -sin(theta_pll); sin(theta_pll) cos(theta_pll)]
+    vdq         = [Vd_t; Vq_t]
+    VDQ         = R*vdq                                # DQ to dq (Global to Local)
+    VD_t        = VDQ[1]
+    VQ_t        = VDQ[2]
+
+    IQ_t        = (V_inf - VD_t)/line_X                # Power balance equation   
+    ID_t        = VQ_t/line_X                          # Power balance equation
+
+    Idq         = R\[ID_t; IQ_t]                       # dq to DQ (Local to Global)
+    Id_t        = Idq[1]
+    Iq_t        = Idq[2]
+
+    p           = Vd_t*Id_t + Vq_t*Iq_t                         
+    q           = Vq_t*Id_t - Vd_t*Iq_t                         
+    dX[1]       = omega_c*(p-p_hat)                                 # p_hat_dot
+    dX[2]       = omega_c*(q-q_hat)                                 # q_hat_dot                      
+    theta_t     = atan(VQ_t/VD_t)                               
+    
+    dX[3]       = theta_t - theta_pll                               # zeta_dot
+    omega_pll   = Kp_pll*(theta_t-theta_pll) + Ki_pll*zeta   
+    dX[4]       = (omega_pll + omega_0 - omega_DQ)*omega_b           # theta_pll_do
+
+    p_star      = p0 - mp*omega_pll                             
+    dX[5]       = Kp_i*(p_star - p_hat)                             # delta_dot
+    v_star      = v0 - mq*(q_hat - q0)                          
+
+    dX[6]       = v_star - Vd_t                                     # phi_d_dot
+    Id_s_hat    = Kp_vc*(v_star - Vd_t) + Ki_vc*phi_d  + Kf_vc*Id_t - (omega_pll + omega_0)*Cf*Vq_t           # Non-state variable - valid
+
+    dX[7]       = Id_s_hat - Id_s                                     # gamma_d_dot
+    Vd_s_hat    = Kp_ic*(Id_s_hat - Id_s  ) + Ki_ic*gamma_d  - Kf_ic*Vd_t - (omega_pll + omega_0)*Lf*Iq_s       # Non-state variable - valid
+
+    Vt_mag      = sqrt((Vd_t)^2 + (Vq_t)^2)
+    dX[8]       = Kv_i*(v_star - Vt_mag)                             # Vs_abs_dot
+    
+    Vd_s        =  Vs_abs*cos(delta - theta_pll)
+    Vq_s        =  Vs_abs*sin(delta - theta_pll)
+
+    #Vd_s        =   1.0020799999999999# Vs_abs*cos(delta - theta_pll)
+    #Vq_s        =   0.03999999999999999# Vs_abs*sin(delta - theta_pll)
+    #Id_t        = 0.4999999999989232
+    #Iq_t        = -0.10000000000592944
+
+    omega_bb    = copy(omega_b)
+    dX[9]       = ((omega_bb*(Vd_s - Vd_t))/Lf + (omega_pll + omega_0)*omega_bb*Iq_s)             # Id_s_dot
+    dX[10]      = ((omega_bb*(Vq_s - Vq_t))/Lf - (omega_pll + omega_0)*omega_bb*Id_s)             # Iq_s_dot    
+    dX[11]      = ((omega_bb*(Id_s - Id_t))/Cf + (omega_pll + omega_0)*omega_bb*Vq_t)             # Vd_t_dot         
+    dX[12]      = ((omega_bb*(Iq_s - Iq_t))/Cf - (omega_pll + omega_0)*omega_bb*Vd_t)             # Vq_t_dot    
+    
+ end
+
+ function LC_filter(dX, X, p, tspan)
     PLL_coeff       = p[1:5]
     P_droop_Coeff   = p[6:12]
     IVControl_coeff = p[13:21]
@@ -134,7 +229,7 @@ function ODE_inverter(dX, X, p, tspan)
     p           = Vd_t*Id_t + Vq_t*Iq_t                         
     q           = Vq_t*Id_t - Vd_t*Iq_t                         
     dX[1]       = omega_c*(p-p_hat)                                 # p_hat_dot
-    dX[2]       = omega_c*(q-q_hat)                                 # q_hat_dot                        
+    dX[2]       = omega_c*(q-q_hat)                                 # q_hat_dot                      
     theta_t     = atan(VQ_t/VD_t)                               
     
     dX[3]       = theta_t - theta_pll                               # zeta_dot
@@ -157,10 +252,11 @@ function ODE_inverter(dX, X, p, tspan)
     Vd_s        =   Vs_abs*cos(delta - theta_pll)
     Vq_s        =   Vs_abs*sin(delta - theta_pll)
 
-    dX[9]       = (omega_b*(Vd_s - Vd_t))/Lf + (omega_pll + omega_0)*omega_b*Iq_s             # Id_s_dot
-    dX[10]      = (omega_b*(Vq_s - Vq_t))/Lf - (omega_pll + omega_0)*omega_b*Id_s             # Iq_s_dot    
-    dX[11]      = (omega_b*(Id_s - Id_t))/Cf + (omega_pll + omega_0)*omega_b*Vq_t             # Vd_t_dot         
-    dX[12]      = (omega_b*(Iq_s - Iq_t))/Cf - (omega_pll + omega_0)*omega_b*Vd_t             # Vq_t_dot    
+    omega_bb    = 1# copy(omega_b)
+    dX[9]       = ((omega_bb*(Vd_s - Vd_t))/Lf + (omega_pll + omega_0)*omega_bb*Iq_s)             # Id_s_dot
+    dX[10]      = ((omega_bb*(Vq_s - Vq_t))/Lf - (omega_pll + omega_0)*omega_bb*Id_s)             # Iq_s_dot    
+    dX[11]      = ((omega_bb*(Id_s - Id_t))/Cf + (omega_pll + omega_0)*omega_bb*Vq_t)             # Vd_t_dot         
+    dX[12]      = ((omega_bb*(Iq_s - Iq_t))/Cf - (omega_pll + omega_0)*omega_bb*Vd_t)             # Vq_t_dot    
     
  end
  
@@ -180,9 +276,9 @@ p = [PLL_coeff; P_droop_Coeff; IVControl_coeff]
 X0 = copy(X)
 
 prob_ = ODEProblem(ODE_inverter, X0, tspan, p)
-sol = solve(prob_, Tsit5())
+sol    = solve(prob_, TRBDF2())
 
-plot(sol, title = "ODE_inverter", xlabel = "Time", ylabel = "X")
+# plot(sol, title = "ODE_inverter", xlabel = "Time", ylabel = "X")
 
 # %%% ==
 
@@ -218,3 +314,59 @@ plot(sol, linewidth = 2, title = "Simple Pendulum Problem", xaxis = "Time",
     yaxis = "Height", label = ["\\theta" "d\\theta"])
 
     ==#
+
+# %%
+Kp_pll      = copy(PLL_coeff[1])
+Ki_pll      = copy(PLL_coeff[2])
+omega_0     = copy(PLL_coeff[3])
+omega_DQ    = copy(PLL_coeff[4])
+omega_b     = copy(PLL_coeff[5])
+
+omega_c     = copy(P_droop_Coeff[1])
+Kp_i        = copy(P_droop_Coeff[2])
+p0          = 0.7 # copy(P_droop_Coeff[3])
+q0          = copy(P_droop_Coeff[4])
+v0          = copy(P_droop_Coeff[5])
+mp          = copy(P_droop_Coeff[6])
+mq          = copy(P_droop_Coeff[7])
+
+Kp_vc       = copy(IVControl_coeff[1])
+Ki_vc       = copy(IVControl_coeff[2])
+Kf_vc       = copy(IVControl_coeff[3])
+Kp_ic       = copy(IVControl_coeff[4])
+Ki_ic       = copy(IVControl_coeff[5])
+Kf_ic       = copy(IVControl_coeff[6])
+Cf          = copy(IVControl_coeff[7])
+Lf          = copy(IVControl_coeff[8])
+Kv_i        = copy(IVControl_coeff[9])
+
+#stating states:
+p_hat       = sol[1,:]
+q_hat       = sol[2,:]
+zeta        = sol[3,:]
+theta_pll   = sol[4,:]
+delta       = sol[5,:]
+phi_d       = sol[6,:]
+gamma_d     = sol[7,:]
+Vs_abs      = sol[8,:]
+Id_s        = sol[9,:]
+Iq_s        = sol[10,:]
+Vd_t        = sol[11,:]
+Vq_t        = sol[12,:]
+p = zeros(19)
+for ii in 1:19
+    R           = [cos(theta_pll[ii]) -sin(theta_pll[ii]); sin(theta_pll[ii]) cos(theta_pll[ii])]
+    vdq         = [Vd_t[ii]; Vq_t[ii]]
+    VDQ         = R*vdq                                # DQ to dq (Global to Local)
+    VD_t        = VDQ[1]
+    VQ_t        = VDQ[2]
+
+    IQ_t        = (V_inf - VD_t)/line_X                # Power balance equation   
+    ID_t        = VQ_t/line_X                          # Power balance equation
+
+    Idq         = R\[ID_t; IQ_t]                       # dq to DQ (Local to Global)
+    Id_t        = Idq[1]
+    Iq_t        = Idq[2]
+
+    p[ii]       = Vd_t[ii]*Id_t + Vq_t[ii]*Iq_t   
+end        

@@ -48,8 +48,8 @@ VQ_t = v_t0*sin(theta_t0)
 Vd_t = v_t0                                        
 Vq_t = 0
 
-IQ_t = (V_inf - VD_t)/line_X                # Non-state variable - valid   
-ID_t = VQ_t/line_X                          #changes
+IQ_t = (V_inf - VD_t)/line_X                              # Non-state variable - valid   
+ID_t = VQ_t/line_X                                        # changes
 
 R    = [cos(theta_t0) -sin(theta_t0); sin(theta_t0) cos(theta_t0)]
 Idq  = R\[ID_t; IQ_t]
@@ -120,14 +120,14 @@ function ODE_inverter(dX, X, p, tspan)
 
     R           = [cos(theta_pll) -sin(theta_pll); sin(theta_pll) cos(theta_pll)]
     vdq         = [Vd_t; Vq_t]
-    VDQ         = R*vdq                                 # DQ to dq (Global to Local)
+    VDQ         = R*vdq                                # DQ to dq (Global to Local)
     VD_t        = VDQ[1]
     VQ_t        = VDQ[2]
 
-    IQ_t        = (V_inf0 - VD_t)/line_X                # Power balance equation   
-    ID_t        = VQ_t/line_X                           # Power balance equation
+    IQ_t        = (V_inf - VD_t)/line_X                # Power balance equation   
+    ID_t        = VQ_t/line_X                          # Power balance equation
 
-    Idq         = R\[ID_t; IQ_t]                        # dq to DQ (Local to Global)
+    Idq         = R\[ID_t; IQ_t]                       # dq to DQ (Local to Global)
     Id_t        = Idq[1]
     Iq_t        = Idq[2]
 
@@ -162,7 +162,6 @@ function ODE_inverter(dX, X, p, tspan)
     dX[11]      = (omega_b*(Id_s - Id_t))/Cf + (omega_pll + omega_0)*omega_b*Vq_t             # Vd_t_dot         
     dX[12]      = (omega_b*(Iq_s - Iq_t))/Cf - (omega_pll + omega_0)*omega_b*Vd_t             # Vq_t_dot    
     
-
  end
  
 # DX = ODE_inverter(dX, X, tspan, p)
@@ -183,12 +182,13 @@ X0 = copy(X)
 prob_ = ODEProblem(ODE_inverter, X0, tspan, p)
 sol = solve(prob_, Tsit5())
 
-# plot(sol, title = "ODE_inverter", xlabel = "Time", ylabel = "Variables", label = ["y1" "y2"])
+plot(sol, title = "ODE_inverter", xlabel = "Time", ylabel = "X")
 
 # %%% ==
 
 # %% 
-# Simple Pendulum Problem
+#== Simple Pendulum Problem == #
+
 using DifferentialEquations, Plots
 
 #Constants
@@ -216,3 +216,5 @@ sol  = solve(prob, Tsit5())
 #Plot
 plot(sol, linewidth = 2, title = "Simple Pendulum Problem", xaxis = "Time",
     yaxis = "Height", label = ["\\theta" "d\\theta"])
+
+    ==#
